@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    /* 解包器必须两端可跑：**不引入任何 Node 类型**。
+       一旦有人写了 node:* 的调用，这里会立刻报错，而不是等到浏览器里才炸。 */
+    "types": []
+  },
+  "include": ["src/**/*.ts"]
+}

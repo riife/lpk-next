@@ -1,0 +1,7 @@
+packages:
+  - 'packages/*'
+  - 'apps/*'
+
+# pnpm 11：允许执行安装脚本的依赖（esbuild 是 vite 的依赖，需要平台二进制）。
+allowBuilds:
+  esbuild: true

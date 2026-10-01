@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>lpk-next · LPK 解包资源播放器</title>
+    <link rel="stylesheet" href="/vendor/sheerly.css" />
+    <!-- 样式由 src/app.ts 里 import 进来，交给 Vite 处理 -->
+    <script>
+      /* 首帧之前定好三件事，避免 FOUC：
+         1) 主题：印象里存过的选择优先，否则跟随系统（sheerly 用 .dark 类切换）
+         2) color-scheme：让原生控件/滚动条跟着主题走
+         3) 路由：决定显示首页还是播放页 */
+      (function () {
+        var saved = null;
+        try {
+          saved = localStorage.getItem('lpk-theme');
+        } catch (error) {
+          /* 隐私模式下读不到就算了 */
+        }
+        var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', dark);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        document.documentElement.dataset.route = /^#.+/.test(location.hash) ? 'player' : 'gallery';
+      })();
+    </script>
+  </head>
+  <body>
+    <!-- 首页：所有解包结果（以角色为单位） -->
+    <section id="gallery" class="gallery">
+      <header class="gallery-head">
+        <div class="gallery-head-inner">
+          <div class="gallery-brand">
+            <h1>lpk-next</h1>
+            <p id="gallerySummary">正在读取资源包列表 …</p>
+          </div>
+          <div class="gallery-tools">
+            <input id="gallerySearch" class="sheerly-input" type="search" placeholder="搜索包名 / 角色 / 作者" autocomplete="off" />
+            <!-- 自定义 select：第一个子元素必须是 <button><selectedcontent>，值显示区用它才可被样式命中 -->
+            <select id="galleryKind" class="sheerly-select">
+              <button type="button"><selectedcontent></selectedcontent></button>
+              <option value="all" selected>全部类型</option>
+              <option value="spine">Spine</option>
+              <option value="cubism">Live2D Cubism</option>
+            </select>
+            <button id="openZipPage" class="sheerly-button" data-variant="secondary" data-size="sm" type="button" title="把 .lpk 解包后打包成 zip 下载">打包下载</button>
+            <button class="sheerly-button theme-toggle" data-size="icon" type="button" aria-label="切换深浅色">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
+            </button>
+          </div>
+        </div>
+      </header>
+      <div id="galleryGrid" class="gallery-grid"></div>
+
+      <!-- 空态 1：一个包都没有 —— 引导拖入（这是纯内存模式下的默认首页，必须能上手） -->
+      <div id="galleryWelcome" class="gallery-welcome" hidden>
+        <div id="galleryDrop" class="gallery-drop">
+          <div class="gallery-drop-title">把 <code>.lpk</code> 或解包后的目录拖到这里</div>
+          <div class="gallery-drop-hint">
+            三种都支持：① <code>.lpk</code> 文件（<code>STM_1_0</code> 包请连同同目录的 <code>config.json</code> 一起拖）<br />
+            ② 解包后的包目录（里面应有 <code>manifest.json</code>）③ 单个角色目录
+          </div>
+          <div class="gallery-drop-actions">
+            <button id="pickLpk" class="sheerly-button" type="button">选择 .lpk 文件</button>
+            <button id="pickFolder" class="sheerly-button" data-variant="secondary" type="button">选择解包目录</button>
+          </div>
+          <input id="lpkInput" type="file" accept=".lpk" multiple hidden />
+        </div>
+      </div>
+
+      <!-- 空态 2：有包但筛选没命中 —— 与"一个包都没有"是两回事，文案不能混用 -->
+      <div id="galleryEmpty" class="sheerly-alert gallery-empty" role="alert" hidden>
+        <div class="sheerly-alert-title">没有匹配的内容</div>
+        <div class="sheerly-alert-description">换个关键词，或者把类型切回“全部类型”。</div>
+      </div>
+
+      <!-- 删除确认：用组件库的 dialog，而不是 window.confirm（那是浏览器原生弹窗，
+           样式与主题都跟不上，也挡不住误触） -->
+      <dialog id="confirmDialog" class="sheerly-dialog" closedby="any">
+        <button class="sheerly-dialog-close" commandfor="confirmDialog" command="close" aria-label="关闭"></button>
+        <div class="sheerly-dialog-header">
+          <h3 class="sheerly-dialog-title" id="confirmDialogTitle">确认删除？</h3>
+          <p class="sheerly-dialog-description" id="confirmDialogText">此操作不可撤销。</p>
+        </div>
+        <div class="sheerly-dialog-footer">
+          <button id="confirmDialogCancel" class="sheerly-button" data-variant="secondary" type="button">取消</button>
+          <button id="confirmDialogOk" class="sheerly-button" data-variant="destructive" type="button">删除</button>
+        </div>
+      </dialog>
+    </section>
+
+    <!-- 「打包下载」页（路由 #zip）：输入解包前的目录，输出解包后的 zip。
+         显隐完全由路由属性控制（CSS 里 html[data-route="zip"] 那两条），不用 hidden 属性，
+         否则"靠 CSS 覆盖 [hidden]"这种隐式行为一改就出错。 -->
+    <section id="zipPage" class="zip-page">
+      <header class="gallery-head">
+        <div class="gallery-head-inner">
+          <div class="gallery-brand">
+            <h1>打包下载</h1>
+            <p id="zipSummary">选一个装着 .lpk 的目录，解包后打包成 zip</p>
+          </div>
+          <div class="gallery-tools">
+            <button id="zipBack" class="sheerly-button" data-variant="ghost" data-size="sm" type="button">← 返回列表</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="zip-body">
+        <div id="zipDrop" class="gallery-drop">
+          <div class="gallery-drop-title">把装有 <code>.lpk</code> 的目录拖到这里</div>
+          <div class="gallery-drop-hint">
+            目录里可以有多个 <code>.lpk</code>；<code>STM_1_0</code> 包请让同目录的 <code>config.json</code> 一起被选中<br />
+            解包与压缩都在浏览器里完成（不上传），完成后直接下载 zip
+          </div>
+          <div class="gallery-drop-actions">
+            <button id="zipPickFolder" class="sheerly-button" type="button">选择目录</button>
+            <button id="zipPickFiles" class="sheerly-button" data-variant="secondary" type="button">选择 .lpk 文件</button>
+            <button id="zipStart" class="sheerly-button" data-variant="outline" type="button" disabled>开始打包</button>
+          </div>
+          <input id="zipFolderInput" type="file" webkitdirectory multiple hidden />
+          <input id="zipFileInput" type="file" accept=".lpk" multiple hidden />
+        </div>
+
+        <div id="zipLog" class="zip-log" hidden></div>
+      </div>
+    </section>
+
+    <div class="app">
+      <aside class="sidebar sheerly-scrollbar">
+        <header class="brand">
+          <div class="brand-row">
+            <div>
+              <h1>lpk-next</h1>
+              <p>Live2DViewerEX <code>.lpk</code> 解包与播放</p>
+            </div>
+            <button class="sheerly-button theme-toggle" data-size="icon" type="button" aria-label="切换深浅色">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
+            </button>
+          </div>
+          <button id="backToGallery" class="sheerly-button" data-variant="outline" data-size="sm" type="button">← 全部内容</button>
+        </header>
+
+        <section class="sheerly-card panel">
+          <div class="sheerly-card-header">
+            <h2 class="sheerly-card-title">资源包</h2>
+          </div>
+          <div class="sheerly-card-content">
+            <label class="sheerly-label" for="packageSelect">选择包</label>
+            <select id="packageSelect" class="sheerly-select package-select" disabled>
+              <button type="button"><selectedcontent></selectedcontent></button>
+            </select>
+            <label class="sheerly-label" for="characterSelect">
+              角色
+              <span class="sheerly-badge" data-variant="secondary" id="characterCount"></span>
+            </label>
+            <select id="characterSelect" class="sheerly-select package-select" disabled>
+              <button type="button"><selectedcontent></selectedcontent></button>
+            </select>
+          </div>
+        </section>
+
+        <section class="sheerly-card panel">
+          <div class="sheerly-card-header">
+            <h2 class="sheerly-card-title">包信息</h2>
+          </div>
+          <div class="sheerly-card-content">
+            <div id="meta" class="meta"></div>
+          </div>
+        </section>
+
+        <section class="sheerly-card panel" id="textureSetPanel" hidden>
+          <div class="sheerly-card-header">
+            <h2 class="sheerly-card-title">
+              贴图版本
+              <span class="sheerly-badge" data-variant="secondary" id="textureSetCount"></span>
+            </h2>
+          </div>
+          <div class="sheerly-card-content">
+            <div id="textureSetList" class="chips"></div>
+          </div>
+        </section>
+
+        <section class="sheerly-card panel">
+          <div class="sheerly-card-header">
+            <h2 class="sheerly-card-title">
+              动作
+              <span class="sheerly-badge" data-variant="secondary" id="animationCount"></span>
+            </h2>
+          </div>
+          <div class="sheerly-card-content">
+            <div id="animationList" class="chips"></div>
+          </div>
+        </section>
+
+        <section class="sheerly-card panel" id="expressionPanel" hidden>
+          <div class="sheerly-card-header">
+            <h2 class="sheerly-card-title">
+              表情
+              <span class="sheerly-badge" data-variant="secondary" id="expressionCount"></span>
+            </h2>
+          </div>
+          <div class="sheerly-card-content">
+            <div id="expressionList" class="chips"></div>
+          </div>
+        </section>
+
+        <section class="sheerly-card panel">
+          <div class="sheerly-card-header">
+            <h2 class="sheerly-card-title">
+              互动
+              <span class="sheerly-badge" data-variant="secondary" id="interactionCount"></span>
+            </h2>
+            <p class="sheerly-card-description">点击画布上的角色也会触发"点击"动作与语音。</p>
+          </div>
+          <div class="sheerly-card-content">
+            <div id="interactionList" class="groups"></div>
+          </div>
+        </section>
+
+        <section class="sheerly-card panel">
+          <div class="sheerly-card-header">
+            <h2 class="sheerly-card-title">
+              语音
+              <span class="sheerly-badge" data-variant="secondary" id="soundCount"></span>
+            </h2>
+          </div>
+          <div class="sheerly-card-content">
+            <div id="soundList" class="chips"></div>
+          </div>
+        </section>
+
+        <section class="sheerly-card panel">
+          <div class="sheerly-card-header">
+            <h2 class="sheerly-card-title">播放设置</h2>
+          </div>
+          <div class="sheerly-card-content">
+            <div class="field">
+              <label class="sheerly-label" for="speed">速度</label>
+              <input id="speed" class="sheerly-slider" type="range" min="0.1" max="2" step="0.05" value="1" />
+              <b id="speedValue" class="field-value">1.00×</b>
+            </div>
+            <div class="label-row">
+              <input id="autoIdle" class="sheerly-switch" type="checkbox" role="switch" checked />
+              <label class="sheerly-label" for="autoIdle">动作播完回到待机</label>
+            </div>
+            <div class="label-row">
+              <input id="showDebug" class="sheerly-switch" type="checkbox" role="switch" />
+              <label class="sheerly-label" for="showDebug">显示骨骼</label>
+            </div>
+            <div class="label-row">
+              <input id="showHitAreas" class="sheerly-switch" type="checkbox" role="switch" />
+              <label class="sheerly-label" for="showHitAreas">可触发区域</label>
+            </div>
+            <div class="field">
+              <label class="sheerly-label" for="followCursorMode">光标跟随</label>
+              <select id="followCursorMode" class="sheerly-select">
+                <button type="button"><selectedcontent></selectedcontent></button>
+                <option value="drag" selected>按住鼠标时跟随</option>
+                <option value="hover">始终跟随</option>
+                <option value="off">关闭</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="sheerly-label" for="followGain">跟随幅度</label>
+              <input id="followGain" class="sheerly-slider" type="range" min="0.1" max="1.5" step="0.05" value="0.5" />
+              <b id="followGainValue" class="field-value">0.50×</b>
+            </div>
+            <div class="buttons">
+              <button id="playIdle" class="sheerly-button" data-variant="secondary" data-size="sm">待机</button>
+              <button id="stopAll" class="sheerly-button" data-variant="secondary" data-size="sm">停止</button>
+              <button id="resetView" class="sheerly-button" data-variant="secondary" data-size="sm">复位视图</button>
+            </div>
+            <p class="sheerly-card-description">拖动平移，滚轮缩放，<kbd class="sheerly-kbd">空格</kbd> 待机/停止语音，<kbd class="sheerly-kbd">Esc</kbd> 关闭面板。</p>
+          </div>
+        </section>
+
+        <section class="sheerly-card panel">
+          <div class="sheerly-card-header">
+            <h2 class="sheerly-card-title">本地目录</h2>
+            <p class="sheerly-card-description">把解包出来的"包目录"或"角色目录"拖到画布上，或者直接选择文件夹。</p>
+          </div>
+          <div class="sheerly-card-content">
+            <label class="sheerly-button" data-variant="outline" data-size="sm">
+              选择文件夹
+              <input id="folderInput" type="file" webkitdirectory multiple hidden />
+            </label>
+          </div>
+        </section>
+      </aside>
+
+      <div class="stage-column">
+        <main class="viewport">
+          <canvas id="stage"></canvas>
+          <canvas id="stage-cubism" hidden></canvas>
+          <div id="hud" class="hud"></div>
+          <div id="hitAreaLayer" class="hit-layer" hidden></div>
+          <div id="choiceMenu" class="sheerly-dropdown-menu choice-menu" hidden>
+            <div id="choiceBox" class="sheerly-dropdown-menu-content" role="menu" aria-label="请选择"></div>
+          </div>
+          <div id="dropZone" class="drop-zone"><div>松开鼠标即可加载这个目录</div></div>
+        </main>
+        <dialog id="areaSheet" class="sheerly-sheet" data-side="bottom">
+          <button class="sheerly-sheet-close" id="areaSheetClose" type="button" aria-label="关闭"></button>
+          <div class="sheerly-sheet-header">
+            <h3 class="sheerly-sheet-title">画布外触发区</h3>
+            <p class="sheerly-sheet-description">
+              这些区域在画布上看不到（算出来的矩形落在画布之外），点一下等同于点击模型上的对应部位。
+            </p>
+          </div>
+          <div class="sheerly-sheet-body">
+            <div id="areaBar" class="area-list"></div>
+          </div>
+        </dialog>
+        <button id="navToggle" class="sheerly-button nav-toggle" data-variant="secondary" type="button" aria-label="操作面板">
+          ☰ 操作
+        </button>
+        <div id="navBackdrop" class="nav-backdrop" hidden></div>
+      </div>
+    </div>
+
+    <!-- 底部状态栏：一侧是状态文本，另一侧复用为"画布外触发区"入口（次要内容不额外占一行） -->
+    <div id="status" class="status">
+      <span id="statusText" class="status-text">正在初始化 …</span>
+      <button id="areaToggle" class="sheerly-button" data-variant="secondary" data-size="xs" type="button" hidden>
+        画布外触发区
+        <span class="sheerly-badge" data-variant="secondary" id="areaCount" hidden></span>
+      </button>
+    </div>
+
+    <!-- Spine 3.8 运行时是经典 script（挂全局 spine）；4.x 与 Cubism 由 app.ts 按需加载 -->
+    <script src="/vendor/spine-webgl.js"></script>
+    <script type="module" src="/src/app.ts"></script>
+  </body>
+</html>

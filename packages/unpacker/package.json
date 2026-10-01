@@ -1,0 +1,17 @@
+{
+  "name": "@lpk/unpacker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node test/verify-md5.mjs && node test/verify-zip.mjs && node test/verify-posix.mjs && node test/verify-unpack.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.4.0",
+    "fflate": "^0.8.2"
+  }
+}

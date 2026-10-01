@@ -1,0 +1,16 @@
+{
+  "name": "lpk",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter @lpk/web build",
+    "dev": "pnpm --filter @lpk/web dev",
+    "serve": "node packages/cli/src/cli.ts serve",
+    "unpack": "node packages/cli/src/cli.ts unpack",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --if-present test"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

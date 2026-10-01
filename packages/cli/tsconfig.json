@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    /* 这个包由 Node 直接执行 TypeScript（类型擦除），所以只允许"可擦除"的语法：
+       enum / namespace / 参数属性这类需要生成代码的写法在这里会被拒绝。
+       同时需要 Node 的类型（fs、path、process…）。 */
+    "erasableSyntaxOnly": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

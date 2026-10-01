@@ -1,0 +1,10 @@
+# 依赖与构建产物
+node_modules/
+apps/web/dist/
+*.tsbuildinfo
+
+# 解包产物（本机数据，不进版本库；用 `pnpm unpack` 或拖入 .lpk 重新生成）
+out/
+
+# 验收脚本产生的临时文件
+tmp-*.png

@@ -1,0 +1,968 @@
+/**
+ * 只剩"布局 + 画布相关"的样式。
+ *
+ * 组件外观（按钮/输入/卡片/徽章/标签页/开关/滑块/提示框…）全部交给 vendor/sheerly.css，
+ * 这里只放它管不到的东西：
+ *   1. 应用骨架：侧栏 + 画布的网格、移动端抽屉、路由显示规则
+ *   2. 画布叠层：可触发区域红框、HUD、触发区按钮栏、选项面板、拖拽提示、加载遮罩
+ *   3. 少量组合布局（面板里的标签+控件行、互动分组行）
+ * 颜色/圆角一律用 --sheerly-* 变量，不再自己定义一套。
+ */
+
+:root {
+  /* 底部状态栏高度：主网格要给画布减去它，状态栏自己也要用它。
+     之前这个 34 写成两处硬编码（移动端还有一处 30），改一处就会错位。 */
+  --status-height: 34px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* 组件库里 .sheerly-card 等自带 display 值，会盖过 hidden 属性，这里统一兜住 */
+[hidden] {
+  display: none !important;
+}
+
+/* 长文本一律不许撑破容器：flex/grid 子项默认 min-width:auto，必须显式归零 */
+.sidebar,
+.panel,
+.sheerly-card-content,
+.pkg-card,
+.group,
+.field,
+.label-row,
+.meta-row {
+  min-width: 0;
+}
+
+.panel .sheerly-card-title,
+.meta-row b,
+.gallery-empty,
+.status {
+  overflow-wrap: anywhere;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--sheerly-background);
+  color: var(--sheerly-foreground);
+  font-family: var(--sheerly-font-sans);
+}
+
+/* 路由决定显示哪一屏；规则在 <head> 的内联脚本里就已设好，所以不会有 FOUC */
+html[data-route="gallery"] .app,
+html[data-route="gallery"] .status,
+html[data-route="gallery"] .nav-toggle {
+  display: none !important;
+}
+
+html[data-route="player"] .gallery {
+  display: none !important;
+}
+
+/* 打包下载页：同样的"普通内容 + 通栏分隔线"结构 */
+html[data-route="zip"] .gallery,
+html[data-route="zip"] .app,
+html[data-route="zip"] .status,
+html[data-route="zip"] .nav-toggle {
+  display: none !important;
+}
+
+html:not([data-route="zip"]) .zip-page {
+  display: none !important;
+}
+
+.zip-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--sheerly-background);
+}
+
+.zip-body {
+  padding: 20px 22px 40px;
+}
+
+/* 打包页的拖放框居中：`.gallery-drop` 自己只是个定宽块，
+   首页那边是靠父容器 flex 居中，这里得自己来（否则贴在左边）。
+   下面的日志框保持通栏，所以只对这一个子元素做居中。 */
+.zip-body > .gallery-drop {
+  margin: 0 auto;
+}
+
+.zip-body > .zip-log {
+  max-width: 720px;
+  margin: 16px auto 0;
+}
+
+.zip-log {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--sheerly-border);
+  border-radius: var(--sheerly-radius-lg);
+  background: var(--sheerly-card);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--sheerly-gray-900);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.zip-log-line {
+  min-height: 1.8em;
+}
+
+/* ---------------- 应用骨架 ---------------- */
+
+.app {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  height: calc(100% - var(--status-height));
+}
+
+.stage-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sidebar {
+  overflow-y: auto;
+  padding: 14px;
+  border-right: 1px solid var(--sheerly-border);
+  background: var(--sheerly-sidebar, var(--sheerly-card));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 侧栏是 flex 列：面板必须按内容高度排布，别被压扁（否则内容会被裁掉） */
+.sidebar > * {
+  flex: none;
+}
+
+.brand-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.brand p {
+  margin: 4px 0 10px;
+  color: var(--sheerly-muted-foreground);
+  font-size: 12px;
+}
+
+.brand code,
+.sheerly-kbd {
+  font-family: var(--sheerly-font-mono);
+}
+
+.sheerly-kbd + .sheerly-kbd,
+.sheerly-kbd {
+  vertical-align: middle;
+}
+
+.panel {
+  border-radius: var(--sheerly-radius-xl);
+}
+
+/* 计数徽章：没有数字时不要留一个空胶囊（兜底，JS 那边也会直接 hidden） */
+.sheerly-badge:empty {
+  display: none;
+}
+
+.panel .sheerly-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.panel .sheerly-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 下拉框：包名/角色名都很长，一律截断而不是把侧栏顶宽。
+   <select> 有基于最长选项的自动最小宽度，只给 width:100% 仍会被撑开，
+   必须额外 min-width: 0（再配合 text-overflow 才有省略号）。 */
+.package-select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+/* 承载它们的容器同样要允许收缩 */
+.panel .sheerly-card-content > .package-select {
+  flex: 1 1 auto;
+}
+
+/* HUD 用组件库的 progress */
+.hud progress.sheerly-progress {
+  flex: 1;
+  height: 6px;
+}
+
+.chips,
+.groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips .sheerly-button {
+  max-width: 100%;
+}
+
+.chips .sheerly-button,
+.group .sheerly-button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  line-height: 20px;
+}
+
+.groups {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.group-label {
+  color: var(--sheerly-muted-foreground);
+  font-size: 11px;
+  min-width: 52px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field,
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field .sheerly-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.field .sheerly-slider,
+.field .sheerly-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.label-row .sheerly-switch {
+  flex: none;
+}
+
+.field-value {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  min-width: 48px;
+  text-align: right;
+}
+
+.buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.buttons > * {
+  flex: 1;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.meta-row {
+  display: flex;
+  gap: 8px;
+}
+
+.meta-row span {
+  flex: none;
+  min-width: 40px;
+  color: var(--sheerly-muted-foreground);
+}
+
+.meta-row b {
+  font-weight: 500;
+  word-break: break-word;
+}
+
+/* ---------------- 画布区 ---------------- */
+
+.viewport {
+  position: relative;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* 画布底色跟着主题走：浅色下用浅灰，深色下用深色渐变 */
+  background: var(--sheerly-muted);
+}
+
+html.dark .viewport {
+  background: radial-gradient(circle at 50% 35%, oklch(24% 0.02 265) 0%, oklch(14% 0.02 265) 70%);
+}
+
+#stage,
+#stage-cubism {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  /* 画布是"拖动画布/平移"的区域，用十字；把手上的 grab、区域上的 pointer
+     由 app.js 的 updateCanvasCursor 覆盖 */
+  cursor: crosshair;
+}
+
+/* HUD：当前动作 + 进度 */
+.hud {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--sheerly-border);
+  border-radius: var(--sheerly-radius-lg);
+  background: oklch(from var(--sheerly-background) l c h / 75%);
+  backdrop-filter: blur(6px);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.hud .hud-title {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud .bar {
+  flex: 1;
+  height: 4px;
+  border-radius: var(--sheerly-radius-full);
+  background: var(--sheerly-muted);
+  overflow: hidden;
+}
+
+.hud .bar > i {
+  display: block;
+  height: 100%;
+  background: var(--sheerly-foreground);
+}
+
+.hud .fps {
+  flex: none;
+  color: var(--sheerly-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* "选择"菜单：外观全部来自组件库的 dropdown-menu-content，
+   这里只负责把它摆到画布中间（popover 的默认定位是跟随触发元素，我们没有触发元素） */
+.choice-menu {
+  position: absolute;
+  inset: 0;
+  /* 组件库给 .sheerly-dropdown-menu 设了 width: fit-content / inline-flex，
+     会把包装层压成 0×0（子元素又是绝对定位、不撑开），于是 left:50% 完全没有参照物。
+     这两条必须显式覆盖，否则菜单会偏到左边。 */
+  width: auto;
+  height: auto;
+  display: block;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.choice-menu[hidden],
+.hit-layer[hidden],
+.nav-backdrop[hidden],
+.drop-zone[hidden] {
+  display: none;
+}
+
+/* 选项菜单：外观完全来自组件库的 dropdown-menu-content，
+   但**定位必须自己来** —— 库里的菜单是"锚定定位"（position-anchor + position-area +
+   position-try-fallbacks + position-visibility），它假设有一个触发按钮当锚点。
+   我们没有触发元素（点画布任意位置弹出），锚点不存在时 position-visibility: anchors-visible
+   会直接把菜单判为不可见，所以这里把整套锚定属性清掉，换成居中的绝对定位。 */
+.choice-menu .sheerly-dropdown-menu-content {
+  /* 关掉组件库的锚定定位与入场动画，改由 .choice-menu 的 hidden 控制显示 */
+  position: absolute;
+  position-anchor: none;
+  position-area: none;
+  position-try-fallbacks: none;
+  position-visibility: always;
+  inset: auto;
+  margin: 0;
+  opacity: 1;
+  scale: 1;
+  display: flex;
+  transition: none;
+  /* 自己定位：画布正中 */
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  pointer-events: auto;
+  min-width: 170px;
+  max-width: min(420px, 78%);
+  max-height: 80%;
+  overflow: auto;
+}
+
+.choice-menu .sheerly-dropdown-menu-item {
+  white-space: normal;
+  text-align: start;
+}
+
+/* 可触发区域：照着原版画红框 */
+.hit-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.hit-layer .hit-rect {
+  position: absolute;
+  border: 2px solid oklch(65% 0.22 25);
+  box-sizing: border-box;
+}
+
+.hit-layer .hit-rect span {
+  position: absolute;
+  left: 0;
+  top: -16px;
+  padding: 0 3px;
+  background: oklch(65% 0.22 25);
+  color: oklch(98% 0 0);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* 画布外触发区的完整清单在 sheerly-sheet 里（入口按钮复用底部状态栏） */
+.area-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.area-list .sheerly-button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  line-height: 20px;
+}
+
+/* 拖拽提示层 */
+.drop-zone {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--sheerly-ring);
+  background: oklch(from var(--sheerly-background) l c h / 70%);
+  font-size: 14px;
+  z-index: 5;
+}
+
+.drop-zone.active {
+  display: flex;
+}
+
+/* 加载遮罩 */
+.viewport.loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: oklch(from var(--sheerly-background) l c h / 55%);
+  backdrop-filter: blur(1px);
+}
+
+.viewport.loading::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 7;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  background-color: var(--sheerly-foreground);
+  animation: 1s linear infinite sheerly-spin;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a9 9 0 1 1-6.219-8.56'/%3E%3C/svg%3E")
+    50% / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a9 9 0 1 1-6.219-8.56'/%3E%3C/svg%3E")
+    50% / contain no-repeat;
+}
+
+/* ---------------- 状态栏 ---------------- */
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--status-height);
+  padding: 0 10px 0 16px;
+  font-size: 12px;
+  color: var(--sheerly-muted-foreground);
+  border-top: 1px solid var(--sheerly-border);
+  background: var(--sheerly-card);
+}
+
+.status-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status .sheerly-button {
+  flex: none;
+}
+
+.status.error .status-text {
+  color: var(--sheerly-destructive);
+}
+
+/* ---------------- 首页 ---------------- */
+
+/* 首页与播放页是**两块并排的普通内容**，由路由决定显示哪一块。
+   头部（.gallery-head）就在文档流里，不做 fixed/sticky 浮层 ——
+   浮动头部会盖住内容、在小屏上还占掉一截可视区。 */
+.gallery {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--sheerly-background);
+  padding-bottom: 40px;
+}
+
+/* 顶栏做成**一条矮栏**：横向仍然铺满（分隔线通栏），
+   靠"标题与汇总同一行 + 收紧内边距"把高度压下来。 */
+.gallery-head {
+  border-bottom: 1px solid var(--sheerly-border);
+  background: var(--sheerly-background);
+}
+
+.gallery-head-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 7px 22px;
+}
+
+/* 标题与汇总一行：省掉原来"标题独占一行 + 下面一行汇总"的高度 */
+.gallery-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.gallery-brand h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.gallery-brand p {
+  margin: 0;
+  color: var(--sheerly-muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gallery-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gallery-tools .sheerly-input {
+  width: 260px;
+}
+
+/* 顶栏里的控件也压矮一档，整条栏才真的矮（组件库默认 36px，这里用 sm 档的观感） */
+.gallery-head-inner .sheerly-input,
+.gallery-head-inner .sheerly-select {
+  height: 28px;
+  padding-block: 0;
+  font-size: 13px;
+}
+
+.gallery-head-inner .sheerly-button[data-size="icon"] {
+  width: 28px;
+  height: 28px;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+  padding: 18px 22px;
+}
+
+.gallery-empty {
+  margin: 40px 22px;
+  width: auto;
+}
+
+/* ---------------- 首页空态：拖入引导 ----------------
+   纯内存模式（构建里没有模型）时这是用户看到的第一个界面，
+   必须一眼看出"该做什么"：一个能拖的区域 + 两个选择按钮。 */
+.gallery-welcome {
+  display: flex;
+  justify-content: center;
+  padding: 32px 22px;
+}
+
+.gallery-drop {
+  width: min(100%, 720px);
+  padding: 40px 24px;
+  border: 2px dashed var(--sheerly-border);
+  border-radius: var(--sheerly-radius-xl);
+  background: var(--sheerly-card);
+  text-align: center;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+/* 拖拽悬停：用组件库的主色描边，明确"松手就加载" */
+.gallery-drop.active {
+  border-color: var(--sheerly-primary, var(--sheerly-foreground));
+  background: var(--sheerly-muted, var(--sheerly-card));
+}
+
+.gallery-drop-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.gallery-drop-hint {
+  margin-top: 10px;
+  color: var(--sheerly-muted-foreground);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.gallery-drop-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.gallery-drop code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--sheerly-muted, transparent);
+}
+
+/* 首页卡片（.pkg-card）：自己实现，不再覆盖组件库的 .sheerly-card。
+   组件库的卡片用"inset 阴影"当描边，图片一贴边就把它盖住；而真实的 border 画在
+   padding 之外，贴边的图片盖不住 —— 所以这里用 border，颜色/圆角/底色仍取组件库变量。 */
+.pkg-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--sheerly-border);
+  border-radius: var(--sheerly-radius-xl);
+  background: var(--sheerly-card);
+  color: var(--sheerly-card-foreground);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    translate 0.15s;
+}
+
+.pkg-card:hover {
+  border-color: var(--sheerly-ring);
+  translate: 0 -2px;
+}
+
+.pkg-card:focus-visible {
+  outline: 2px solid var(--sheerly-ring);
+  outline-offset: 2px;
+}
+
+.pkg-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px 0;
+}
+
+.pkg-card-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pkg-card-sub {
+  margin: 0;
+  color: var(--sheerly-muted-foreground);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pkg-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 12px;
+  color: var(--sheerly-muted-foreground);
+  font-size: 11px;
+}
+
+/* 骨架卡片与真卡片同形，只是内容换成占位块 */
+.pkg-card.skeleton {
+  cursor: default;
+  pointer-events: none;
+}
+
+.pkg-card.skeleton .card-thumb {
+  border-radius: 0;
+}
+
+.sk-line {
+  height: 12px;
+  border-radius: var(--sheerly-radius-sm);
+}
+
+.sk-line.w70 {
+  width: 70%;
+}
+
+.sk-line.w45 {
+  width: 45%;
+}
+
+.card-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  /* 顶部圆角由卡片的 overflow:hidden 裁剪 */
+  border-radius: 0;
+  background: var(--sheerly-muted);
+}
+
+.card-sub {
+  color: var(--sheerly-muted-foreground);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------- 移动端：画布占满，操作项收进抽屉 ---------------- */
+
+.nav-toggle,
+.nav-backdrop {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  html,
+  body {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  body {
+    overflow: hidden;
+  }
+
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    height: 100%;
+  }
+
+  .stage-column {
+    position: relative;
+    height: 100%;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    z-index: 20;
+    width: 100%;
+    max-width: 100vw;
+    max-height: 76vh;
+    border-right: 0;
+    border-top: 1px solid var(--sheerly-border);
+    border-radius: var(--sheerly-radius-xl) var(--sheerly-radius-xl) 0 0;
+    box-shadow: 0 -12px 32px oklch(0% 0 0 / 45%);
+    transform: translateY(101%);
+    transition: transform 0.22s ease;
+    overscroll-behavior: contain;
+  }
+
+  body.nav-open .sidebar {
+    transform: translateY(0);
+  }
+
+  .nav-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 19;
+    background: oklch(0% 0 0 / 45%);
+  }
+
+  .nav-toggle {
+    display: inline-flex;
+    position: absolute;
+    left: 12px;
+    right: auto;
+    bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+    z-index: 21;
+    box-shadow: 0 6px 18px oklch(0% 0 0 / 45%);
+  }
+
+  .status {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 18;
+    --status-height: 30px;
+    height: var(--status-height);
+    padding: 0 8px 0 12px;
+    background: oklch(from var(--sheerly-card) l c h / 90%);
+  }
+
+  .hud {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+  }
+
+  .hud .fps {
+    display: none;
+  }
+
+  .gallery-tools .sheerly-input {
+    width: 100%;
+  }
+
+  /* 小屏也要**至少两列**：卡片改窄、间距收紧，但不塌成一列 ——
+     一列时一屏只看得见一张卡，翻找包非常费劲。 */
+  .gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .pkg-card-title {
+    font-size: 13px;
+  }
+
+  .pkg-card-sub {
+    font-size: 11px;
+  }
+
+  /* 卡片上的删除按钮在窄卡片里要放得下 */
+  .pkg-card-meta .pkg-card-delete {
+    margin-inline-start: auto;
+  }
+}
+
+/* 更窄的手机（竖屏）同样是两列，只是再收一点边距 */
+@media (max-width: 420px) {
+  .gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .gallery-head {
+    padding: 14px 14px 10px;
+  }
+}
+
+@media (pointer: coarse) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+.sheerly-select selectedcontent {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

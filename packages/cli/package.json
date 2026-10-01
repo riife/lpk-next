@@ -1,0 +1,22 @@
+{
+  "name": "@lpk/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "lpk": "./src/cli.ts"
+  },
+  "scripts": {
+    "serve": "node src/cli.ts serve",
+    "unpack": "node src/cli.ts unpack",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.0",
+    "@lpk/unpacker": "workspace:*",
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0"
+  }
+}
